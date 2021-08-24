@@ -2,8 +2,8 @@
 # tasks file for mongoDB setup
 
 - name: install mongoDB
-  apt: 
-    name: mongodb
+  yum: 
+    name: mongodb-org-server
     state: present
     update_cache: yes
 
@@ -77,12 +77,12 @@
 
 - name: Ensure mongodb is running and and enabled to start automatically on reboots
   systemd:
-    name: mongodb
+    name: mongod
     enabled: yes
     state: started
 
 - name: install ntp
-  apt: 
+  yum: 
     name: ntp
     state: present
     update_cache: yes
