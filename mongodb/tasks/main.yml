@@ -1,13 +1,66 @@
 ---
 # tasks file for mongoDB setup
+#
+- name: Add mongo repo
+  yum_repository:
+    name: MongoDB 4.4
+    description: MongoDB 4.4 s390x Repository
+    baseurl: https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/4.4/s390x/
+    gpgcheck: 1
+    enabled: 1
+    gpgkey: https://www.mongodb.org/static/pgp/server-4.4.asc
 
-- name: install mongoDB
+- name: Install mongoDB
   yum: 
-    name: mongodb-org-server
+    name: mongodb-org
     state: present
     update_cache: yes
 
-- name: copy config file
+- name: Install checkpolicy
+  yum: 
+    name: checkpolicy
+    state: present
+    update_cache: yes
+
+- name: Copy selinux policy file
+  copy:
+    src: mongodb_cgroup_memory.pp
+    dest: /tmp/mongodb_cgroup_memory.pp
+    owner: root
+    group: root
+    mode: 0644
+
+- name: Update SELinux policy
+  command: semodule -i /tmp/mongodb_cgroup_memory.pp
+
+- name: Apply SELinux policy for data
+  command: semanage fcontext -a -t mongod_var_lib_t /var/lib/mongo.*
+
+- name: Apply SELinux policy for log files
+  command: semanage fcontext -a -t mongod_log_t  /var/log/mongodb.*
+
+- name: Apply SELinux policy for run file
+  command: semanage fcontext -a -t mongod_var_run_t /var/run/mongodb.*
+
+- name: Update user policy - data
+  command: chcon -Rv -u system_u -t mongod_var_lib_t /var/lib/mongo
+
+- name: Update user policy - logs
+  command: chcon -Rv -u system_u -t mongod_log_t /var/log/mongodb
+
+- name: Update user policy - run
+  command: chcon -Rv -u system_u -t mongod_var_run_t /var/run/mongodb
+
+- name: Apply updated policy - data
+  command: restorecon -R -v /var/lib/mongo
+
+- name: Apply updated policy - logs
+  command: restorecon -R -v /var/log/mongodb
+
+- name: Apply updated policy - run
+  command: restorecon -R -v /var/run/mongodb
+
+- name: Copy mongodb config file
   copy:
     src: mongodb.conf
     dest: /etc/mongodb.conf
@@ -17,7 +70,7 @@
   notify:
     - restart mongodb
 
-- name: create /etc/security/limits.d/mongodb.conf
+- name: Create /etc/security/limits.d/mongodb.conf
   copy:
     src: security-mongodb.conf
     dest: /etc/security/limits.d/mongodb.conf
@@ -75,14 +128,19 @@
     value: '4096'
     state: present
 
+- name: Install ntp
+  yum: 
+    name: ntp
+    state: present
+    update_cache: yes
+
+- name: Enforce SELinux
+  selinux:
+    policy: targeted
+    state: enforcing
+
 - name: Ensure mongodb is running and and enabled to start automatically on reboots
   systemd:
     name: mongod
     enabled: yes
     state: started
-
-- name: install ntp
-  yum: 
-    name: ntp
-    state: present
-    update_cache: yes
